@@ -1,0 +1,135 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  customer
+}
+
+enum ProjectStatus {
+  draft
+  active
+  completed
+}
+
+enum MemberRole {
+  admin
+  member
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdProjects  Project[]        @relation("CreatedProjects")
+  projectMembers   ProjectMember[]
+  uploadedFiles    File[]
+  comments         Comment[]
+
+  @@map("users")
+}
+
+model Project {
+  id          Int           @id @default(autoincrement())
+  name        String
+  description String?
+  status      ProjectStatus @default(draft)
+  createdBy   Int?          @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  creator User?           @relation("CreatedProjects", fields: [createdBy], references: [id], onDelete: SetNull)
+  members ProjectMember[]
+  pages   Page[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        Int        @id @default(autoincrement())
+  projectId Int        @map("project_id")
+  userId    Int        @map("user_id")
+  role      MemberRole @default(member)
+  invitedAt DateTime   @default(now()) @map("invited_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model Page {
+  id          Int     @id @default(autoincrement())
+  projectId   Int     @map("project_id")
+  parentId    Int?    @map("parent_id")
+  name        String
+  slug        String
+  description String?
+  sortOrder   Int     @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   Page?     @relation("PageHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Page[]    @relation("PageHierarchy")
+  files    File[]
+  comments Comment[]
+
+  @@unique([projectId, slug])
+  @@map("pages")
+}
+
+model File {
+  id           Int      @id @default(autoincrement())
+  pageId       Int      @map("page_id")
+  uploadedBy   Int?     @map("uploaded_by")
+  originalName String   @map("original_name")
+  fileName     String   @map("file_name")
+  filePath     String   @map("file_path")
+  fileType     String   @map("file_type")
+  fileSize     Int      @map("file_size")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  // Relations
+  page     Page  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  uploader User? @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@map("files")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  pageId    Int      @map("page_id")
+  userId    Int?     @map("user_id")
+  parentId  Int?     @map("parent_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  page     Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  parent   Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  children Comment[] @relation("CommentThread")
+
+  @@map("comments")
+}
